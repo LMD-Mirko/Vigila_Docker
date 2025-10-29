@@ -16,23 +16,36 @@ const upload = multer({
 });
 
 // Cliente MinIO (simulación de AWS S3)
-const s3Endpoint = process.env.S3_ENDPOINT || 'http://storage:9000';
-const endPoint = s3Endpoint.replace('http://', '').replace('https://', '').replace(':9000', '');
+// En Railway no existe servicio "storage" automáticamente.
+// Soportamos variables estándar y, si no existen, omitimos la inicialización.
+const s3EndpointRaw = process.env.S3_ENDPOINT || process.env.MINIO_ENDPOINT; // ej: http://storage:9000
+const s3Port = parseInt(process.env.S3_PORT || process.env.MINIO_PORT || '9000', 10);
+const s3AccessKey = process.env.S3_ACCESS_KEY || process.env.MINIO_ACCESS_KEY || 'admin';
+const s3SecretKey = process.env.S3_SECRET_KEY || process.env.MINIO_SECRET_KEY || 'admin123';
 
-const minioClient = new Minio.Client({
-  endPoint: endPoint || 'storage',
-  port: 9000,
-  useSSL: false,
-  accessKey: process.env.S3_ACCESS_KEY || 'admin',
-  secretKey: process.env.S3_SECRET_KEY || 'admin123'
-});
+let minioClient = null;
+if (s3EndpointRaw) {
+  const sanitized = s3EndpointRaw.replace('http://', '').replace('https://', '');
+  const hostOnly = sanitized.includes(':') ? sanitized.split(':')[0] : sanitized;
+  minioClient = new Minio.Client({
+    endPoint: hostOnly,
+    port: s3Port,
+    useSSL: false,
+    accessKey: s3AccessKey,
+    secretKey: s3SecretKey
+  });
+} else {
+  console.log('[INFO] S3_ENDPOINT no definido. Se omitirá la inicialización de MinIO.');
+}
 
 // Conexión a la base de datos MySQL (simulación de AWS RDS)
+// Soporta variables nativas de Railway MySQL: MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT
 const dbConfig = {
-  host: process.env.DB_HOST || 'db',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'root',
-  database: process.env.DB_NAME || 'vigila'
+  host: process.env.MYSQLHOST || process.env.DB_HOST || 'db',
+  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'root',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'vigila',
+  port: process.env.MYSQLPORT ? parseInt(process.env.MYSQLPORT, 10) : undefined
 };
 
 let db;
@@ -62,10 +75,13 @@ async function initDatabase() {
 
 // Inicializar bucket de MinIO
 async function initStorage() {
+  if (!minioClient) {
+    console.log('[INFO] MinIO no configurado. Saltando inicialización de almacenamiento.');
+    return;
+  }
   try {
     const bucketName = 'videos';
     const exists = await minioClient.bucketExists(bucketName);
-    
     if (!exists) {
       await minioClient.makeBucket(bucketName);
       console.log('[OK] Bucket "videos" creado en MinIO (S3 simulado)');
@@ -100,12 +116,16 @@ app.post('/upload', upload.single('video'), async (req, res) => {
 
     console.log('[INFO] Video recibido:', req.file.originalname);
 
-    // Subir a MinIO (S3 simulado)
+    // Subir a MinIO (S3 simulado) si está configurado; si no, guardamos solo metadata local
     const objectName = `videos/${Date.now()}-${req.file.originalname}`;
-    await minioClient.fPutObject('videos', objectName, req.file.path, {
-      'Content-Type': req.file.mimetype
-    });
-    console.log('[OK] Video subido a MinIO (S3):', objectName);
+    if (minioClient) {
+      await minioClient.fPutObject('videos', objectName, req.file.path, {
+        'Content-Type': req.file.mimetype
+      });
+      console.log('[OK] Video subido a MinIO (S3):', objectName);
+    } else {
+      console.log('[INFO] MinIO no configurado. Se omite subida de objeto, se registrará solo metadata.');
+    }
 
     // Guardar metadata en MySQL (RDS simulado)
     const [result] = await db.execute(
@@ -156,8 +176,10 @@ app.get('/videos/:id/download', async (req, res) => {
     }
 
     const video = rows[0];
+    if (!minioClient) {
+      return res.status(503).json({ error: 'Almacenamiento no configurado en este despliegue' });
+    }
     const stream = await minioClient.getObject('videos', video.s3_key);
-    
     res.setHeader('Content-Disposition', `attachment; filename="${video.filename}"`);
     stream.pipe(res);
   } catch (error) {
