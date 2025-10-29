@@ -9,6 +9,32 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
+// Logger de requests
+app.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on('finish', () => {
+    const dt = Date.now() - t0;
+    console.log(`[REQ] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${dt}ms)`);
+  });
+  next();
+});
+
+function mask(v) {
+  if (!v) return v;
+  return v.length <= 4 ? '****' : v.slice(0, 2) + '****' + v.slice(-2);
+}
+
+function logStartupEnv() {
+  console.log('[ENV] NODE_ENV =', process.env.NODE_ENV || 'undefined');
+  console.log('[ENV] PORT =', process.env.PORT || 'undefined');
+  console.log('[ENV] MYSQLHOST =', process.env.MYSQLHOST || process.env.DB_HOST || 'undefined');
+  console.log('[ENV] MYSQLPORT =', process.env.MYSQLPORT || process.env.DB_PORT || 'undefined');
+  console.log('[ENV] MYSQLUSER =', process.env.MYSQLUSER || process.env.DB_USER || 'undefined');
+  console.log('[ENV] MYSQLDATABASE =', process.env.MYSQLDATABASE || process.env.DB_NAME || 'undefined');
+  console.log('[ENV] MYSQLPASSWORD =', (process.env.MYSQLPASSWORD || process.env.DB_PASSWORD) ? mask(process.env.MYSQLPASSWORD || process.env.DB_PASSWORD) : 'undefined');
+  console.log('[ENV] S3_ENDPOINT =', process.env.S3_ENDPOINT || process.env.MINIO_ENDPOINT || 'undefined');
+}
+
 // Configuración de Multer para almacenar archivos temporalmente
 const upload = multer({ 
   dest: 'uploads/',
@@ -41,6 +67,7 @@ if (s3EndpointRaw) {
     accessKey: s3AccessKey,
     secretKey: s3SecretKey
   });
+  console.log('[MINIO] Configurado host=', hostOnly, 'port=', s3Port);
 } else {
   console.log('[INFO] S3_ENDPOINT no definido. Se omitirá la inicialización de MinIO.');
 }
@@ -60,6 +87,7 @@ let db;
 // Inicializar conexión a la base de datos
 async function initDatabase() {
   try {
+    console.log('[DB] Conectando a', dbConfig.host, dbConfig.port || 3306, 'DB=', dbConfig.database, 'User=', dbConfig.user);
     db = await mysql.createConnection(dbConfig);
     console.log('[OK] Conectado a MySQL (RDS simulado)');
 
@@ -75,7 +103,7 @@ async function initDatabase() {
     `);
     console.log('[OK] Tabla de videos creada/verificada');
   } catch (error) {
-    console.error('[ERROR] Error conectando a MySQL:', error.message);
+    console.error('[ERROR] Error conectando a MySQL:', error && error.message ? error.message : error);
     setTimeout(initDatabase, 5000);
   }
 }
@@ -95,6 +123,11 @@ async function initStorage() {
     } else {
       console.log('[OK] Bucket "videos" ya existe en MinIO');
     }
+    try {
+      await minioClient.getBucketTagging('videos');
+    } catch (e) {
+      console.log('[MINIO] TagSet no existe (esperado si nunca se configuró).');
+    }
   } catch (error) {
     console.error('[ERROR] Error inicializando MinIO:', error.message);
   }
@@ -105,6 +138,7 @@ app.get('/', (req, res) => {
   res.json({
     service: 'VIGILA Backend',
     status: 'active',
+    uptimeSec: Math.round(process.uptime()),
     aws_services: {
       ec2: 'simulado (Docker container)',
       rds: 'simulado (MySQL)',
@@ -112,6 +146,19 @@ app.get('/', (req, res) => {
     },
     timestamp: new Date().toISOString()
   });
+});
+
+app.get('/healthz', async (req, res) => {
+  const health = { ok: true, db: false, s3: !!minioClient };
+  try {
+    if (db) {
+      await db.query('SELECT 1');
+      health.db = true;
+    }
+  } catch (e) {
+    health.ok = false;
+  }
+  res.status(health.ok ? 200 : 503).json(health);
 });
 
 // Endpoint: Subir video
@@ -227,11 +274,19 @@ const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, async () => {
   console.log(`[INFO] Servidor VIGILA activo en puerto ${PORT}`);
   console.log(`[INFO] Accede en: http://localhost:${PORT}`);
+  logStartupEnv();
   
   // Inicializar servicios
   await initDatabase();
   await initStorage();
   
   console.log('[OK] Todos los servicios AWS simulados están listos');
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] UnhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] UncaughtException:', err);
 });
 
