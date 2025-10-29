@@ -1,8 +1,6 @@
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: .
     ports:
       - "${PORT:-4000}:4000"
     environment:
