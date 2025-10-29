@@ -2,7 +2,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "4000:4000"
+      - "${PORT:-4000}:4000"
     environment:
       NODE_ENV: production
       DB_HOST: db

@@ -185,8 +185,9 @@ app.get('/stats', async (req, res) => {
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, async () => {
+app.listen(PORT, HOST, async () => {
   console.log(`[INFO] Servidor VIGILA activo en puerto ${PORT}`);
   console.log(`[INFO] Accede en: http://localhost:${PORT}`);
   
