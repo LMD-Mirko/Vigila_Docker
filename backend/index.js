@@ -16,20 +16,23 @@ const upload = multer({
 });
 
 // Cliente MinIO (simulación de AWS S3)
+const s3Endpoint = process.env.S3_ENDPOINT || 'http://storage:9000';
+const endPoint = s3Endpoint.replace('http://', '').replace('https://', '').replace(':9000', '');
+
 const minioClient = new Minio.Client({
-  endPoint: process.env.S3_ENDPOINT.replace('http://', '').replace(':9000', ''),
+  endPoint: endPoint || 'storage',
   port: 9000,
   useSSL: false,
-  accessKey: process.env.S3_ACCESS_KEY,
-  secretKey: process.env.S3_SECRET_KEY
+  accessKey: process.env.S3_ACCESS_KEY || 'admin',
+  secretKey: process.env.S3_SECRET_KEY || 'admin123'
 });
 
 // Conexión a la base de datos MySQL (simulación de AWS RDS)
 const dbConfig = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+  host: process.env.DB_HOST || 'db',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'root',
+  database: process.env.DB_NAME || 'vigila'
 };
 
 let db;
