@@ -30,8 +30,10 @@ const s3SecretKey = process.env.S3_SECRET_KEY || process.env.MINIO_SECRET_KEY ||
 
 let minioClient = null;
 if (s3EndpointRaw) {
-  const sanitized = s3EndpointRaw.replace('http://', '').replace('https://', '');
-  const hostOnly = sanitized.includes(':') ? sanitized.split(':')[0] : sanitized;
+  // Normalizar endpoint: quitar protocolo, puerto, path y trailing slash
+  const withoutProto = s3EndpointRaw.replace('http://', '').replace('https://', '');
+  const withoutPath = withoutProto.split('/')[0];
+  const hostOnly = withoutPath.includes(':') ? withoutPath.split(':')[0] : withoutPath;
   minioClient = new Minio.Client({
     endPoint: hostOnly,
     port: s3Port,
@@ -119,15 +121,20 @@ app.post('/upload', upload.single('video'), async (req, res) => {
       return res.status(400).json({ error: 'No se recibió ningún archivo de video' });
     }
 
-    console.log('[INFO] Video recibido:', req.file.originalname);
+    console.log('[INFO] Video recibido:', req.file.originalname, '| path:', req.file.path, '| size:', req.file.size);
 
     // Subir a MinIO (S3 simulado) si está configurado; si no, guardamos solo metadata local
     const objectName = `videos/${Date.now()}-${req.file.originalname}`;
     if (minioClient) {
-      await minioClient.fPutObject('videos', objectName, req.file.path, {
-        'Content-Type': req.file.mimetype
-      });
-      console.log('[OK] Video subido a MinIO (S3):', objectName);
+      try {
+        await minioClient.fPutObject('videos', objectName, req.file.path, {
+          'Content-Type': req.file.mimetype
+        });
+        console.log('[OK] Video subido a MinIO (S3):', objectName);
+      } catch (err) {
+        console.error('[ERROR] fPutObject MinIO:', err && err.message ? err.message : err);
+        return res.status(502).json({ error: 'Error subiendo a almacenamiento: ' + (err && err.message ? err.message : String(err)) });
+      }
     } else {
       console.log('[INFO] MinIO no configurado. Se omite subida de objeto, se registrará solo metadata.');
     }
