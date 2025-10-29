@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+.git
+.gitignore
+*.log
+document/
+*.txt
+RAILWAY_*.txt
+SOLUCION_*.txt
+README_RAILWAY.md
+test-sistema.sh

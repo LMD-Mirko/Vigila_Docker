@@ -1,0 +1,25 @@
+# Ignorar carpeta de documentacion
+document/
+
+# Ignorar archivos temporales
+*.txt
+RAILWAY_CLI.txt
+SOLUCION_WEB.txt
+README_RAILWAY.md
+
+# Git
+.git/
+
+# Variables de entorno locales
+.env
+.env.local
+
+# Scripts locales
+test-sistema.sh
+
+# Logs
+*.log
+
+# Node modules
+node_modules/
+
