@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+backend/node_modules/
+
+# Archivos subidos
+backend/uploads/
+*.mp4
+*.avi
+*.mov
+
+# Variables de entorno sensibles
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
