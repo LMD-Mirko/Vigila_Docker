@@ -6,13 +6,13 @@ WORKDIR /app
 RUN apk add --no-cache curl
 
 # Copiar archivos de dependencias
-COPY package*.json ./
+COPY package.json ./
 
 # Instalar dependencias de producción
 RUN npm install --only=production
 
 # Copiar código de la aplicación
-COPY . .
+COPY index.js ./
 
 # Crear directorio para uploads
 RUN mkdir -p uploads && chmod 777 uploads
@@ -26,4 +26,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # Comando para iniciar la aplicación
 CMD ["node", "index.js"]
-
