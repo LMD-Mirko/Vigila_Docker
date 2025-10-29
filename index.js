@@ -19,6 +19,11 @@ const upload = multer({
 // En Railway no existe servicio "storage" automáticamente.
 // Soportamos variables estándar y, si no existen, omitimos la inicialización.
 const s3EndpointRaw = process.env.S3_ENDPOINT || process.env.MINIO_ENDPOINT; // ej: http://storage:9000
+if (s3EndpointRaw) {
+  console.log(`[INFO] S3_ENDPOINT detectado: ${s3EndpointRaw}`);
+} else {
+  console.log('[INFO] S3_ENDPOINT no establecido; se desactiva MinIO.');
+}
 const s3Port = parseInt(process.env.S3_PORT || process.env.MINIO_PORT || '9000', 10);
 const s3AccessKey = process.env.S3_ACCESS_KEY || process.env.MINIO_ACCESS_KEY || 'admin';
 const s3SecretKey = process.env.S3_SECRET_KEY || process.env.MINIO_SECRET_KEY || 'admin123';
